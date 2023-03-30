@@ -7,6 +7,7 @@ import fs from 'fs'
 export class Enexpress extends EventEmitter {
   constructor () {
     super()
+    this._middlewares = []
     this._routes = []
     this.get = this.get.bind(this)
     this.post = this.post.bind(this)
@@ -103,6 +104,10 @@ export class Enexpress extends EventEmitter {
     this._routes.push({ method: 'DELETE', path, handler })
   }
 
+  use (middleware) {
+    this._middlewares.push(middleware)
+  }
+
   listen (port, callback) {
     const server = http.createServer((req, res) => {
       const { method, url } = req
@@ -126,6 +131,11 @@ export class Enexpress extends EventEmitter {
           console.log(chalk.green('Routing in:', route.method, route.path))
           this.res = res
           this.#constructReturnHeaders(res)
+          if (this._middlewares.length > 0) {
+            this._middlewares.forEach((middleware) => {
+              middleware(req, res)
+            })
+          }
           route.handler(req, res)
         } else {
           res.statusCode = 404
