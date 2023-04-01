@@ -2,11 +2,15 @@
   "name": "rest",
   "version": "0.0.1",
   "description": "",
-  "main": "index.js",
+  "main": "rest.js",
+  "type": "module",
+  "module": "rest.mjs",
   "scripts": {
     "dev": "node --watch index.mjs",
     "start": "node index.mjs",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "babel rest.mjs -o rest.js",
+    "lint": "standard"
   },
   "author": "@Eneko96",
   "license": "ISC",
@@ -14,6 +18,7 @@
     "chalk": "^5.2.0"
   },
   "devDependencies": {
+    "babel-cli": "^6.26.0",
     "standard": "^17.0.0"
   },
   "eslintConfig": {

@@ -14,6 +14,8 @@ export class Enexpress extends EventEmitter {
     this.put = this.put.bind(this)
     this.delete = this.delete.bind(this)
     this.listen = this.listen.bind(this)
+    this.use = this.use.bind(this)
+    this.router = this.router.bind(this)
   }
 
   #constructReturnHeaders (res) {
@@ -34,8 +36,10 @@ export class Enexpress extends EventEmitter {
     }
   }
 
-  get (path, handler) {
-    this._routes.push({ method: 'GET', path, handler })
+  get (...args) {
+    const [path, ...restArgs] = args
+    const handler = restArgs.pop()
+    this._routes.push({ method: 'GET', middlewares: restArgs, path, handler })
   }
 
   post (path, handler) {
@@ -108,6 +112,11 @@ export class Enexpress extends EventEmitter {
     this._middlewares.push(middleware)
   }
 
+  handle404 (_req, res) {
+    res.statusCode = 404
+    res.end('404 Not Found')
+  }
+
   listen (port, callback) {
     const server = http.createServer((req, res) => {
       const { method, url } = req
@@ -131,10 +140,9 @@ export class Enexpress extends EventEmitter {
           console.log(chalk.green('Routing in:', route.method, route.path))
           this.res = res
           this.#constructReturnHeaders(res)
-          if (this._middlewares.length > 0) {
-            this._middlewares.forEach((middleware) => {
-              middleware(req, res)
-            })
+          // run middlewares
+          for (const middleware of this._middlewares) {
+            middleware(req, res)
           }
           route.handler(req, res)
         } else {
