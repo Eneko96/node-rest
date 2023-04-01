@@ -1,6 +1,6 @@
 {
-  "name": "rest",
-  "version": "0.0.1",
+  "name": "@eneko96/enexpress",
+  "version": "0.0.2",
   "description": "",
   "main": "rest.js",
   "type": "module",
