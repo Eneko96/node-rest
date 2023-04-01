@@ -15,7 +15,6 @@ export class Enexpress extends EventEmitter {
     this.delete = this.delete.bind(this)
     this.listen = this.listen.bind(this)
     this.use = this.use.bind(this)
-    this.router = this.router.bind(this)
   }
 
   #constructReturnHeaders (res) {
