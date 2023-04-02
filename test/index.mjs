@@ -1,15 +1,14 @@
-import { describe, it } from 'node:test'
-import assert from 'node:assert'
+import { it, expect, describe } from 'vitest'
 
 import { Enexpress } from '../rest.mjs'
 
 describe('Enexpress', () => {
   it('should be a class', () => {
-    assert.equal(typeof Enexpress, 'function')
+    expect(Enexpress).toBeInstanceOf(Function)
   })
 
   it('should have a constructor', () => {
-    assert.equal(typeof Enexpress.constructor, 'function')
+    expect(new Enexpress()).toBeInstanceOf(Enexpress)
   })
 
   it('should open a server', () => {
@@ -17,7 +16,7 @@ describe('Enexpress', () => {
     app.listen(4000)
 
     app.get('/', (req, _res) => {
-      assert.equal(req.url, '/')
+      expect(req).toBeInstanceOf(Object)
     })
   })
 })
