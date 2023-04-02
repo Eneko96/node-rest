@@ -35,6 +35,29 @@ export class Enexpress extends EventEmitter {
     }
   }
 
+  #constructRequest (req, isDynamic, route) {
+    const { url } = req
+    const [, search] = url.split('?')
+    const query = {}
+
+    if (search) {
+      for (const pair of search.split('&')) {
+        const [key, value] = pair.split('=')
+        query[key] = value
+      }
+    }
+
+    if (isDynamic) {
+      const params = url.split('/').at(-1)
+      const key = route.path.split('/:').at(-1)
+      req.params = { [key]: params }
+    }
+
+    if (search) {
+      req.query = query
+    }
+  }
+
   get (...args) {
     const [path, ...restArgs] = args
     const handler = restArgs.pop()
@@ -119,6 +142,7 @@ export class Enexpress extends EventEmitter {
   listen (port, callback) {
     const server = http.createServer((req, res) => {
       const { method, url } = req
+      let isDynamic
       if (method === 'GET' && url.startsWith('/static/')) {
         const filePath = path.join(__dirname, url)
         fs.readFile(filePath, (err, data) => {
@@ -132,14 +156,21 @@ export class Enexpress extends EventEmitter {
           }
         })
       } else {
-        const route = this._routes.find(
-          (r) => r.method === method && r.path === url
-        )
+        const route = this._routes.find((r) => {
+          isDynamic = r.path.includes('/:')
+          if (isDynamic) {
+            const [path] = r.path.substring(1).split('/:')
+            const [urlPath] = url.substring(1).split('/')
+            return r.method === method && path === urlPath
+          }
+          return r.method === method && r.path === url
+        })
         if (route) {
-          console.log(chalk.green('Routing in:', route.method, route.path))
+          console.log(chalk.bold.green('Routing in:', route.method, route.path))
+          this.#constructRequest(req, isDynamic, route)
           this.res = res
           this.#constructReturnHeaders(res)
-          // run middlewares
+
           for (const middleware of this._middlewares) {
             middleware(req, res)
           }
