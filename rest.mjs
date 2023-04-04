@@ -15,6 +15,7 @@ export class Enexpress extends EventEmitter {
     this.delete = this.delete.bind(this)
     this.listen = this.listen.bind(this)
     this.use = this.use.bind(this)
+    this.router = []
   }
 
   #constructReturnHeaders (res) {
@@ -130,8 +131,13 @@ export class Enexpress extends EventEmitter {
     this._routes.push({ method: 'DELETE', path, handler })
   }
 
-  use (middleware) {
-    this._middlewares.push(middleware)
+  use (middleware, construct) {
+    if (construct) {
+      this.router.push({
+        path: middleware,
+        _routes: construct
+      })
+    } else this._middlewares.push(middleware)
   }
 
   handle404 (_req, res) {
@@ -175,6 +181,32 @@ export class Enexpress extends EventEmitter {
             middleware(req, res)
           }
           route.handler(req, res)
+        } else if (this.router && this.router.length > 0) {
+          this.router.forEach((r) => {
+            if (url === r.path || url.startsWith(r.path)) {
+              const rt = r._routes.find((subR) => {
+                isDynamic = subR.path.includes('/:')
+                if (isDynamic) {
+                  const [path] = subR.path.split('/:')
+                  const [urlPath] = url.substring(1).split('/')
+                  return subR.method === method && urlPath + path === urlPath
+                }
+                const formatUrl = url.replace(r.path.substring(1), '')
+                return subR.method === method && subR.path === formatUrl
+              })
+              if (rt) {
+                console.log(chalk.bold.green('Routing in:', rt.method, r.path + rt.path))
+                this.#constructRequest(req, isDynamic, rt)
+                this.res = res
+                this.#constructReturnHeaders(res)
+
+                for (const middleware of this._middlewares) {
+                  middleware(req, res)
+                }
+                rt.handler(req, res)
+              }
+            }
+          })
         } else {
           res.statusCode = 404
           res.end()
@@ -183,5 +215,98 @@ export class Enexpress extends EventEmitter {
     })
     process.stdout.write('\x1Bc')
     server.listen(port, callback)
+  }
+}
+
+export class Router {
+  constructor () {
+    this._routes = []
+    this._middlewares = []
+  }
+
+  get (...args) {
+    const [path, ...restArgs] = args
+    const handler = restArgs.pop()
+    this._routes.push({ method: 'GET', middlewares: restArgs, path, handler })
+  }
+
+  post (path, handler) {
+    const parseBody = (req) => {
+      return new Promise((resolve, reject) => {
+        let body = ''
+        req.on('data', chunk => {
+          body += chunk.toString()
+        })
+        req.on('end', () => {
+          try {
+            req.body = JSON.parse(body)
+            resolve()
+          } catch (err) {
+            reject(err)
+          }
+        })
+      })
+    }
+
+    const wrappedHandler = async (req, res) => {
+      try {
+        await parseBody(req)
+        handler(req, res)
+      } catch (err) {
+        res.statusCode = 400
+        res.end(`Error: ${err.message}`)
+      }
+    }
+
+    this._routes.push({ method: 'POST', path, handler: wrappedHandler })
+  }
+
+  put (path, handler) {
+    const parseBody = (req) => {
+      return new Promise((resolve, reject) => {
+        let body = ''
+        req.on('data', chunk => {
+          body += chunk.toString()
+        })
+        req.on('end', () => {
+          try {
+            req.body = JSON.parse(body)
+            resolve()
+          } catch (err) {
+            reject(err)
+          }
+        })
+      })
+    }
+
+    const wrappedHandler = async (req, res) => {
+      try {
+        await parseBody(req)
+        handler(req, res)
+      } catch (err) {
+        res.statusCode = 400
+        res.end(`Error: ${err.message}`)
+      }
+    }
+
+    this._routes.push({ method: 'PUT', path, handler: wrappedHandler })
+  }
+
+  delete (path, handler) {
+    this._routes.push({ method: 'DELETE', path, handler })
+  }
+
+  use (middleware, construct) {
+    if (construct) {
+      this.router.push({
+        path: middleware,
+        _routes: construct
+      })
+    } else this._middlewares.push(middleware)
+  }
+
+  handle404 (_req, res) {
+    res.statusCode = 404
+    res.end('404 Not Found')
   }
 }
