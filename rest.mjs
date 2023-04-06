@@ -36,6 +36,46 @@ export class Enexpress extends EventEmitter {
     }
   }
 
+  matchRoute = (method, url, routes, { fromRouter = false, path }) => {
+    const dynamicPathRegex = /\/:[^/]+/g
+    for (const route of routes) {
+      if (route.method !== method) {
+        continue
+      }
+
+      const fromRouterFormat = (fromRouter && route.path === '/') ? '' : route.path
+      let routePath = fromRouter ? path + fromRouterFormat : route.path
+      const dynamicSegments = routePath.match(dynamicPathRegex)
+
+      if (dynamicSegments) {
+        for (const segment of dynamicSegments) {
+          const paramValue = url.slice(routePath.indexOf(segment) + 1).split('/')[0]
+          if (!paramValue) {
+            break
+          }
+          if (url.includes('?')) {
+            const urlQuery = url.split('?')[0]
+            if (routePath === urlQuery) return route
+          }
+
+          routePath = routePath.replace(segment, `/${paramValue}`)
+        }
+      }
+
+      // condition for if the route has query params
+      if (url.includes('?')) {
+        const urlQuery = url.split('?')[0]
+        if (routePath === urlQuery) return route
+      }
+
+      if (routePath === url) {
+        return route
+      }
+    }
+
+    return null
+  }
+
   #constructRequest (req, isDynamic, route) {
     const { url } = req
     const [, search] = url.split('?')
@@ -62,6 +102,7 @@ export class Enexpress extends EventEmitter {
   get (...args) {
     const [path, ...restArgs] = args
     const handler = restArgs.pop()
+
     this._routes.push({ method: 'GET', middlewares: restArgs, path, handler })
   }
 
@@ -148,7 +189,6 @@ export class Enexpress extends EventEmitter {
   listen (port, callback) {
     const server = http.createServer((req, res) => {
       const { method, url } = req
-      let isDynamic
       if (method === 'GET' && url.startsWith('/static/')) {
         const filePath = path.join(__dirname, url)
         fs.readFile(filePath, (err, data) => {
@@ -162,18 +202,10 @@ export class Enexpress extends EventEmitter {
           }
         })
       } else {
-        const route = this._routes.find((r) => {
-          isDynamic = r.path.includes('/:')
-          if (isDynamic) {
-            const [path] = r.path.substring(1).split('/:')
-            const [urlPath] = url.substring(1).split('/')
-            return r.method === method && path === urlPath
-          }
-          return r.method === method && r.path === url
-        })
+        const route = this.matchRoute(method, url, this._routes, { fromRouter: false })
         if (route) {
           console.log(chalk.bold.green('Routing in:', route.method, route.path))
-          this.#constructRequest(req, isDynamic, route)
+          this.#constructRequest(req, route.path.includes('/:'), route)
           this.res = res
           this.#constructReturnHeaders(res)
 
@@ -183,28 +215,18 @@ export class Enexpress extends EventEmitter {
           route.handler(req, res)
         } else if (this.router && this.router.length > 0) {
           this.router.forEach((r) => {
-            if (url === r.path || url.startsWith(r.path)) {
-              const rt = r._routes.find((subR) => {
-                isDynamic = subR.path.includes('/:')
-                if (isDynamic) {
-                  const [path] = subR.path.split('/:')
-                  const [urlPath] = url.substring(1).split('/')
-                  return subR.method === method && urlPath + path === urlPath
-                }
-                const formatUrl = url.replace(r.path.substring(1), '')
-                return subR.method === method && subR.path === formatUrl
-              })
-              if (rt) {
-                console.log(chalk.bold.green('Routing in:', rt.method, r.path + rt.path))
-                this.#constructRequest(req, isDynamic, rt)
-                this.res = res
-                this.#constructReturnHeaders(res)
+            const rt = this.matchRoute(method, url, r._routes, { fromRouter: true, path: r.path })
+            if (rt) {
+              const formatRoute = rt.path === '/' ? '' : rt.path
+              console.log(chalk.bold.green('Routing in:', rt.method, r.path + formatRoute))
+              this.#constructRequest(req, rt.path.includes('/:'), rt)
+              this.res = res
+              this.#constructReturnHeaders(res)
 
-                for (const middleware of this._middlewares) {
-                  middleware(req, res)
-                }
-                rt.handler(req, res)
+              for (const middleware of this._middlewares) {
+                middleware(req, res)
               }
+              rt.handler(req, res)
             }
           })
         } else {
@@ -215,6 +237,10 @@ export class Enexpress extends EventEmitter {
     })
     process.stdout.write('\x1Bc')
     server.listen(port, callback)
+  }
+
+  kill () {
+    process.exit()
   }
 }
 
