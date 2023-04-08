@@ -42,7 +42,6 @@ export class Enexpress extends EventEmitter {
       if (route.method !== method) {
         continue
       }
-
       const fromRouterFormat = (fromRouter && route.path === '/') ? '' : route.path
       let routePath = fromRouter ? path + fromRouterFormat : route.path
       const dynamicSegments = routePath.match(dynamicPathRegex)
@@ -53,19 +52,15 @@ export class Enexpress extends EventEmitter {
           if (!paramValue) {
             break
           }
-          if (url.includes('?')) {
-            const urlQuery = url.split('?')[0]
-            if (routePath === urlQuery) return route
-          }
 
           routePath = routePath.replace(segment, `/${paramValue}`)
         }
       }
 
-      // condition for if the route has query params
-      if (url.includes('?')) {
-        const urlQuery = url.split('?')[0]
-        if (routePath === urlQuery) return route
+      const queryIndex = url.indexOf('?')
+      if (queryIndex !== -1) {
+        url = url.slice(0, queryIndex)
+        if (url === routePath) return route
       }
 
       if (routePath === url) {
@@ -188,6 +183,7 @@ export class Enexpress extends EventEmitter {
 
   listen (port, callback) {
     const server = http.createServer((req, res) => {
+      console.log('----------------------------------------------')
       const { method, url } = req
       if (method === 'GET' && url.startsWith('/static/')) {
         const filePath = path.join(__dirname, url)
