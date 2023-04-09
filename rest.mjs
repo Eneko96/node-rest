@@ -39,6 +39,7 @@ export class Enexpress extends EventEmitter {
   matchRoute = (method, url, routes, { fromRouter = false, path }) => {
     const dynamicPathRegex = /\/:[^/]+/g
     for (const route of routes) {
+      let auxUrl = url
       if (route.method !== method) {
         continue
       }
@@ -48,7 +49,10 @@ export class Enexpress extends EventEmitter {
 
       if (dynamicSegments) {
         for (const segment of dynamicSegments) {
-          const paramValue = url.slice(routePath.indexOf(segment) + 1).split('/')[0]
+          const sum = url.includes('?') ? segment.length : 1
+          const paramValue = url
+            .slice(routePath.indexOf(segment) + sum)
+            .split('/')[0]
           if (!paramValue) {
             break
           }
@@ -57,13 +61,15 @@ export class Enexpress extends EventEmitter {
         }
       }
 
+      // extract query parameters from URL
       const queryIndex = url.indexOf('?')
-      if (queryIndex !== -1) {
-        url = url.slice(0, queryIndex)
-        if (url === routePath) return route
-      }
+      const _query = queryIndex !== -1 ? url.slice(queryIndex + 1) : '' // eslint-disable-line
+      auxUrl = queryIndex !== -1 ? url.slice(0, queryIndex) : url
 
-      if (routePath === url) {
+      // remove query parameters from route path
+      const routePathWithoutQuery = routePath.replace(/\?.*/, '')
+
+      if (routePathWithoutQuery === auxUrl) {
         return route
       }
     }
@@ -71,7 +77,7 @@ export class Enexpress extends EventEmitter {
     return null
   }
 
-  #constructRequest (req, isDynamic, route) {
+  #constructRequest (req, isDynamic, route, fromRouter = false) {
     const { url } = req
     const [, search] = url.split('?')
     const query = {}
@@ -84,9 +90,13 @@ export class Enexpress extends EventEmitter {
     }
 
     if (isDynamic) {
-      const params = url.split('/').at(-1)
-      const key = route.path.split('/:').at(-1)
-      req.params = { [key]: params }
+      const params = url.split('/')
+      const keys = route.path.split('/:')
+      req.params = {}
+      if (fromRouter) params.shift()
+      for (let i = 1; i < keys.length; i++) {
+        req.params[keys[i]] = params[i]
+      }
     }
 
     if (search) {
@@ -215,7 +225,7 @@ export class Enexpress extends EventEmitter {
             if (rt) {
               const formatRoute = rt.path === '/' ? '' : rt.path
               console.log(chalk.bold.green('Routing in:', rt.method, r.path + formatRoute))
-              this.#constructRequest(req, rt.path.includes('/:'), rt)
+              this.#constructRequest(req, rt.path.includes('/:'), rt, true)
               this.res = res
               this.#constructReturnHeaders(res)
 
